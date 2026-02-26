@@ -1,0 +1,9 @@
+bin/
+obj/
+.vs/
+*.user
+*.suo
+*.dbmdl
+*.jfm
+appsettings.Development.json
+secrets.json
