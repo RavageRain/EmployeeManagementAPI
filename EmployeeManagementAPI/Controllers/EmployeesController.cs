@@ -1,6 +1,7 @@
 ﻿using EmployeeManagementAPI.Data;
 using EmployeeManagementAPI.DTOs;
 using EmployeeManagementAPI.Models;
+using EmployeeManagementAPI.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -13,23 +14,24 @@ namespace EmployeeManagementAPI.Controllers
     [ApiController]
     public class EmployeesController : ControllerBase
     {
-        private readonly ApplicationDbContext _context;
+        private readonly IEmployeeService _service;
 
-        public EmployeesController(ApplicationDbContext context)
+        public EmployeesController(IEmployeeService service)
         {
-            _context = context;
+            _service = service;
         }
 
         [HttpGet] 
         public async Task<ActionResult<List<Employee>>> GetAllEmployees()
         {
-            return Ok(await _context.Employees.ToListAsync());
+            var employees = await _service.GetAllEmployeesAsync();
+            return Ok(employees);
         }
 
         [HttpGet("{id}")]
         public async Task<ActionResult<Employee>> GetEmployeeFromId(int id)
         {
-            var employee = await _context.Employees.FirstOrDefaultAsync(empId => empId.Id == id);
+            var employee = await _service.GetEmployeeFromIdAsync(id);
 
             if (employee == null)
             {
@@ -40,45 +42,45 @@ namespace EmployeeManagementAPI.Controllers
         }
         [Authorize(Roles = "Admin")]
         [HttpPost]
-        public async Task<ActionResult<Employee>> CreateEmployee(CreateEmployeeDto newEmployeeDto)
+        public async Task<IActionResult> CreateEmployee(CreateEmployeeDto newEmployeeDto)
         {
-            if (!ModelState.IsValid)// not needed because of ApiController. It does it automatically
-            {
-                return BadRequest(ModelState);
-            }
-
             var newEmployee = new Employee
             {
                 Name = newEmployeeDto.Name,
                 Position = newEmployeeDto.Position,
                 Salary = newEmployeeDto.Salary
             };
-            _context.Employees.Add(newEmployee);
-            await _context.SaveChangesAsync();
 
-            return CreatedAtAction(nameof(GetEmployeeFromId), new {id =  newEmployee.Id}, newEmployee);
+            var created = await _service.CreateEmployeeAsync(newEmployee);
+
+            var response = new EmployeeDto
+            {
+                Id = created.Id,
+                Name = created.Name,
+                Position = created.Position,
+                Salary = created.Salary
+
+            }; 
+
+            return CreatedAtAction(nameof(GetEmployeeFromId), new {id =  response.Id}, response);
         }
 
         [HttpPut("{id}")]
-        public async Task<ActionResult<Employee>> UpdateEmployee(int id, UpdateEmployeeDto updatedEmployeeDto)
+        public async Task<IActionResult> UpdateEmployee(int id, UpdateEmployeeDto updatedEmployeeDto)
         {
-            if (!ModelState.IsValid)
+            var employee = new Employee
             {
-                return BadRequest(ModelState);
-            }
+                Position = updatedEmployeeDto.Position,
+                Salary = updatedEmployeeDto.Salary
+            };
 
-            var employee = await _context.Employees.FirstOrDefaultAsync(empId => empId.Id == id);
+            var success = await _service.UpdateEmployeeAsync(id, employee);
 
-            if (employee == null)
+            if (success == null)
             {
                 return NotFound();
             }
 
-            employee.Position = updatedEmployeeDto.Position;
-            employee.Salary = updatedEmployeeDto.Salary;
-
-            _context.Employees.Update(employee);
-            await _context.SaveChangesAsync();
 
             return NoContent();
         }
@@ -87,13 +89,12 @@ namespace EmployeeManagementAPI.Controllers
         [HttpDelete("{id}")]
         public async Task<ActionResult<Employee>> DeleteEmployee(int id)
         {
-            var employee = await _context.Employees.FirstOrDefaultAsync(empId => empId.Id == id);
+            var employee = await _service.DeleteEmployeeAsync(id);
+
             if (employee == null)
             {
                 return NotFound();
             }
-            _context.Employees.Remove(employee);
-            await _context.SaveChangesAsync();
 
             return NoContent();
         }
